@@ -6,6 +6,7 @@ package oauth2
 
 import (
 	"net/http"
+	"net/url"
 
 	"github.com/drone/go-scm/scm"
 	"github.com/drone/go-scm/scm/transport/internal"
@@ -40,6 +41,12 @@ func (t *Transport) RoundTrip(r *http.Request) (*http.Response, error) {
 	}
 	r2 := internal.CloneRequest(r)
 	r2.Header.Set("Authorization", t.scheme()+" "+token.Token)
+
+	// coding并不支持Authorization头，只支持带access_token参数
+	orgQuery, _ := url.ParseQuery(r2.URL.RawQuery)
+	orgQuery.Set("access_token", token.Token)
+	r2.URL.RawQuery = orgQuery.Encode()
+
 	return t.base().RoundTrip(r2)
 }
 

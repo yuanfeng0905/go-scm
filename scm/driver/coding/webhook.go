@@ -220,12 +220,12 @@ func convertPushHook(dst *pushHook) *scm.PushHook {
 				Sha:  dst.After,
 				Link: dst.Compare,
 				Author: scm.Signature{
-					Login: dst.Pusher.Login,
+					Login: dst.Pusher.GlobalKey,
 					Email: dst.Pusher.Email,
 					Name:  dst.Pusher.Fullname,
 				},
 				Committer: scm.Signature{
-					Login: dst.Pusher.Login,
+					Login: dst.Pusher.GlobalKey,
 					Email: dst.Pusher.Email,
 					Name:  dst.Pusher.Fullname,
 				},
@@ -245,7 +245,7 @@ func convertPullRequestHook(dst *pullRequestHook) *scm.PullRequestHook {
 			Body:   dst.PullRequest.Body,
 			Closed: dst.PullRequest.State == "closed",
 			Author: scm.User{
-				Login:  dst.PullRequest.User.Login,
+				Login:  dst.PullRequest.User.GlobalKey,
 				Email:  dst.PullRequest.User.Email,
 				Avatar: dst.PullRequest.User.Avatar,
 			},

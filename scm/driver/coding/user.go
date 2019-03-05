@@ -16,16 +16,30 @@ type userService struct {
 }
 
 func (s *userService) Find(ctx context.Context) (*scm.User, *scm.Response, error) {
-	out := new(user)
-	res, err := s.client.do(ctx, "GET", "api/v1/user", nil, out)
-	return convertUser(out), res, err
+	userRet := new(userRet)
+	res, err := s.client.do(ctx, "GET", "api/account/current_user", nil, userRet)
+	if err != nil {
+		return &scm.User{}, res, err
+	}
+	// 第二次请求获取用户邮箱
+	emailRet := new(emailRet)
+	res1, err1 := s.client.do(ctx, "GET", "api/account/email", nil, emailRet)
+	if err1 != nil {
+		return &scm.User{}, res1, err1
+	}
+
+	u := convertUser(&userRet.Data)
+	u.Email = emailRet.Data
+
+	return u, res, nil
 }
 
 func (s *userService) FindLogin(ctx context.Context, login string) (*scm.User, *scm.Response, error) {
-	path := fmt.Sprintf("api/v1/users/%s", login)
-	out := new(user)
+	path := fmt.Sprintf("api/account/key/%s", login)
+	out := new(userRet)
 	res, err := s.client.do(ctx, "GET", path, nil, out)
-	return convertUser(out), res, err
+
+	return convertUser(&out.Data), res, err
 }
 
 func (s *userService) FindEmail(ctx context.Context) (string, *scm.Response, error) {
@@ -36,19 +50,22 @@ func (s *userService) FindEmail(ctx context.Context) (string, *scm.Response, err
 //
 // native data structures
 //
-
 type user struct {
-	ID       int    `json:"id"`
-	Login    string `json:"login"`
-	Username string `json:"username"`
-	Fullname string `json:"full_name"`
-	Email    string `json:"email"`
-	Avatar   string `json:"avatar_url"`
+	GlobalKey string `json:"global_key"`
+	Fullname  string `json:"name"`
+	Email     string `json:"email"`
+	Avatar    string `json:"avatar"`
 }
 
-//
-// native data structure conversion
-//
+type emailRet struct {
+	Code int    `json:"code"`
+	Data string `json:"data"`
+}
+
+type userRet struct {
+	Code int  `json:"code"`
+	Data user `json:"data"`
+}
 
 func convertUser(src *user) *scm.User {
 	return &scm.User{
@@ -60,8 +77,5 @@ func convertUser(src *user) *scm.User {
 }
 
 func userLogin(src *user) string {
-	if src.Username != "" {
-		return src.Username
-	}
-	return src.Login
+	return src.GlobalKey
 }
