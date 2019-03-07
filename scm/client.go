@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -98,6 +99,8 @@ type (
 		Users         UserService
 		Webhooks      WebhookService
 
+		DumpRequest func(*http.Request, bool) ([]byte, error)
+
 		// DumpResponse optionally specifies a function to
 		// dump the the response body for debugging purposes.
 		// This can be set to httputil.DumpResponse.
@@ -162,9 +165,15 @@ func (c *Client) Do(ctx context.Context, in *Request) (*Response, error) {
 		return nil, err
 	}
 
+	if c.DumpRequest != nil {
+		dump, _ := c.DumpRequest(req, false)
+		os.Stdout.Write(dump)
+	}
+
 	// dumps the response for debugging purposes.
 	if c.DumpResponse != nil {
-		c.DumpResponse(res, true)
+		dump, _ := c.DumpResponse(res, true)
+		os.Stdout.Write(dump)
 	}
 	return newResponse(res), nil
 }
