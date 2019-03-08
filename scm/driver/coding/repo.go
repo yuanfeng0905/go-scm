@@ -134,7 +134,11 @@ type (
 	repository struct {
 		ID            int    `json:"id"`
 		OwnerUsername string `json:"owner_user_name"`
-
+		Owner         struct {
+			ID        int    `json:"id"`
+			Login     string `json:"login"`
+			AvatarURL string `json:"avatar_url"`
+		} `json:"owner"`
 		Name     string `json:"name"`
 		FullName string `json:"display_name"`
 		//Private       bool      `json:"private"`
@@ -205,7 +209,7 @@ func convertRepositoryList(src *projectRet) []*scm.Repository {
 func convertRepository(src *repository) *scm.Repository {
 	return &scm.Repository{
 		ID:        strconv.Itoa(src.ID),
-		Namespace: src.OwnerUsername,
+		Namespace: src.Owner.Login,
 		Name:      src.Name,
 		Perm:      convertPerm(perm{}),
 		Branch:    src.DefaultBranch,

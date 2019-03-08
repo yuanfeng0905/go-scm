@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"time"
 
 	"github.com/drone/go-scm/scm"
 )
@@ -221,13 +222,13 @@ func convertPushHook(dst *pushHook) *scm.PushHook {
 					Login: dst.Commits[0].Author.Username,
 					Email: dst.Commits[0].Author.Email,
 					Name:  dst.Commits[0].Author.Name,
-					Date:  dst.Commits[0].Timestamp,
+					Date:  time.Unix(dst.Commits[0].Timestamp, 0),
 				},
 				Committer: scm.Signature{
 					Login: dst.Commits[0].Committer.Username,
 					Email: dst.Commits[0].Committer.Email,
 					Name:  dst.Commits[0].Committer.Name,
-					Date:  dst.Commits[0].Timestamp,
+					Date:  time.Unix(dst.Commits[0].Timestamp, 0),
 				},
 			},
 			Repo:   *convertRepository(&dst.Repository),

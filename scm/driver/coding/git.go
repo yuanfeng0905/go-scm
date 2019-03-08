@@ -7,7 +7,6 @@ package coding
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/drone/go-scm/scm"
 )
@@ -72,7 +71,7 @@ type (
 		URL       string    `json:"url"`
 		Author    signature `json:"author"`
 		Committer signature `json:"committer"`
-		Timestamp time.Time `json:"timestamp"`
+		Timestamp int64     `json:"timestamp"`
 	}
 
 	// gitea signature object.
