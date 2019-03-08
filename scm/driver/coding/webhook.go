@@ -27,7 +27,7 @@ func (s *webhookService) Parse(req *http.Request, fn scm.SecretFunc) (scm.Webhoo
 	}
 
 	var hook scm.Webhook
-	switch req.Header.Get("X-Gitea-Event") {
+	switch req.Header.Get("X-Coding-Event") {
 	case "push":
 		hook, err = s.parsePushHook(data)
 	case "create":
@@ -123,49 +123,69 @@ func (s *webhookService) parsePullRequestHook(data []byte) (scm.Webhook, error) 
 //
 
 type (
-	// gitea push webhook payload
+	pusher struct {
+		Name     string `json:"name"`
+		Email    string `json:"email"`
+		Username string `json:"username"`
+	}
+
+	sender struct {
+		Login  string `json:"login"`
+		Name   string `json:"name"`
+		Avatar string `json:"avatar_url"`
+	}
+
+	// coding push webhook payload
 	pushHook struct {
 		Ref        string     `json:"ref"`
 		Before     string     `json:"before"`
 		After      string     `json:"after"`
-		Compare    string     `json:"compare_url"`
+		Compare    string     `json:"compare"`
 		Commits    []commit   `json:"commits"`
 		Repository repository `json:"repository"`
-		Pusher     user       `json:"pusher"`
-		Sender     user       `json:"sender"`
+		Pusher     pusher     `json:"pusher"`
+		Sender     sender     `json:"sender"`
 	}
 
-	// gitea create webhook payload
+	// coding create webhook payload
 	createHook struct {
 		Ref           string     `json:"ref"`
 		RefType       string     `json:"ref_type"`
 		DefaultBranch string     `json:"default_branch"`
 		Repository    repository `json:"repository"`
-		Sender        user       `json:"sender"`
+		Sender        sender     `json:"sender"`
 	}
 
-	// gitea issue webhook payload
+	// coding issue webhook payload
 	issueHook struct {
 		Action     string       `json:"action"`
 		Issue      issue        `json:"issue"`
 		Comment    issueComment `json:"comment"`
 		Repository repository   `json:"repository"`
-		Sender     user         `json:"sender"`
+		Sender     sender       `json:"sender"`
 	}
 
-	// gitea pull request webhook payload
+	// coding pull request webhook payload
 	pullRequestHook struct {
 		Action      string      `json:"action"`
 		Number      int         `json:"number"`
 		PullRequest pullRequest `json:"pull_request"`
 		Repository  repository  `json:"repository"`
-		Sender      user        `json:"sender"`
+		Sender      sender      `json:"sender"`
 	}
 )
 
 //
 // native data structure conversion
 //
+
+func convertSender2User(dst *sender) *scm.User {
+	return &scm.User{
+		Login:  dst.Login,
+		Avatar: dst.Avatar,
+		Name:   dst.Name,
+	}
+}
 
 func convertTagHook(dst *createHook, action scm.Action) *scm.TagHook {
 	return &scm.TagHook{
@@ -174,7 +194,7 @@ func convertTagHook(dst *createHook, action scm.Action) *scm.TagHook {
 			Name: dst.Ref,
 		},
 		Repo:   *convertRepository(&dst.Repository),
-		Sender: *convertUser(&dst.Sender),
+		Sender: *convertSender2User(&dst.Sender),
 	}
 }
 
@@ -185,7 +205,7 @@ func convertBranchHook(dst *createHook, action scm.Action) *scm.BranchHook {
 			Name: dst.Ref,
 		},
 		Repo:   *convertRepository(&dst.Repository),
-		Sender: *convertUser(&dst.Sender),
+		Sender: *convertSender2User(&dst.Sender),
 	}
 }
 
@@ -211,7 +231,7 @@ func convertPushHook(dst *pushHook) *scm.PushHook {
 				},
 			},
 			Repo:   *convertRepository(&dst.Repository),
-			Sender: *convertUser(&dst.Sender),
+			Sender: *convertSender2User(&dst.Sender),
 		}
 	} else {
 		return &scm.PushHook{
@@ -220,18 +240,18 @@ func convertPushHook(dst *pushHook) *scm.PushHook {
 				Sha:  dst.After,
 				Link: dst.Compare,
 				Author: scm.Signature{
-					Login: dst.Pusher.GlobalKey,
+					Login: dst.Pusher.Username,
 					Email: dst.Pusher.Email,
-					Name:  dst.Pusher.Fullname,
+					Name:  dst.Pusher.Name,
 				},
 				Committer: scm.Signature{
-					Login: dst.Pusher.GlobalKey,
+					Login: dst.Pusher.Username,
 					Email: dst.Pusher.Email,
-					Name:  dst.Pusher.Fullname,
+					Name:  dst.Pusher.Name,
 				},
 			},
 			Repo:   *convertRepository(&dst.Repository),
-			Sender: *convertUser(&dst.Sender),
+			Sender: *convertSender2User(&dst.Sender),
 		}
 	}
 }
@@ -260,7 +280,7 @@ func convertPullRequestHook(dst *pullRequestHook) *scm.PullRequestHook {
 			Sha:    dst.PullRequest.Head.Sha,
 		},
 		Repo:   *convertRepository(&dst.Repository),
-		Sender: *convertUser(&dst.Sender),
+		Sender: *convertSender2User(&dst.Sender),
 	}
 }
 
@@ -270,7 +290,7 @@ func convertPullRequestCommentHook(dst *issueHook) *scm.PullRequestCommentHook {
 		PullRequest: *convertPullRequestFromIssue(&dst.Issue),
 		Comment:     *convertIssueComment(&dst.Comment),
 		Repo:        *convertRepository(&dst.Repository),
-		Sender:      *convertUser(&dst.Sender),
+		Sender:      *convertSender2User(&dst.Sender),
 	}
 }
 
@@ -279,7 +299,7 @@ func convertIssueHook(dst *issueHook) *scm.IssueHook {
 		Action: convertAction(dst.Action),
 		Issue:  *convertIssue(&dst.Issue),
 		Repo:   *convertRepository(&dst.Repository),
-		Sender: *convertUser(&dst.Sender),
+		Sender: *convertSender2User(&dst.Sender),
 	}
 }
 
@@ -289,7 +309,7 @@ func convertIssueCommentHook(dst *issueHook) *scm.IssueCommentHook {
 		Issue:   *convertIssue(&dst.Issue),
 		Comment: *convertIssueComment(&dst.Comment),
 		Repo:    *convertRepository(&dst.Repository),
-		Sender:  *convertUser(&dst.Sender),
+		Sender:  *convertSender2User(&dst.Sender),
 	}
 }
 

@@ -39,10 +39,20 @@ func (s *repositoryService) FindPerms(ctx context.Context, repo string) (*scm.Pe
 	return convertRepository(out).Perm, res, err
 }
 
-func (s *repositoryService) List(ctx context.Context, _ scm.ListOptions) ([]*scm.Repository, *scm.Response, error) {
-	path := fmt.Sprintf("api/v1/user/repos")
-	out := []*repository{}
+// 获取当前用户的仓库列表
+func (s *repositoryService) List(ctx context.Context, opts scm.ListOptions) ([]*scm.Repository, *scm.Response, error) {
+	path := fmt.Sprintf("api/user/projects?%s", encodeListOptions(opts))
+	out := &projectRet{}
 	res, err := s.client.do(ctx, "GET", path, nil, &out)
+
+	// 非restful标准的接口，自己处理好分页参数
+	if out.Data.Page < out.Data.TotalPage {
+		res.Page.Next = out.Data.Page + 1
+		res.Page.NextURL = "https://coding.net" //兼容
+	} else {
+		res.Page.Next = 0
+		res.Page.NextURL = ""
+	}
 	return convertRepositoryList(out), res, err
 }
 
@@ -108,31 +118,44 @@ func (s *repositoryService) DeleteHook(ctx context.Context, repo string, id stri
 //
 
 type (
-	// gitea repository resource.
-	repository struct {
-		ID            int       `json:"id"`
-		Owner         user      `json:"owner"`
-		Name          string    `json:"name"`
-		FullName      string    `json:"full_name"`
-		Private       bool      `json:"private"`
-		Fork          bool      `json:"fork"`
-		HTMLURL       string    `json:"html_url"`
-		SSHURL        string    `json:"ssh_url"`
-		CloneURL      string    `json:"clone_url"`
-		DefaultBranch string    `json:"default_branch"`
-		CreatedAt     time.Time `json:"created_at"`
-		UpdatedAt     time.Time `json:"updated_at"`
-		Permissions   perm      `json:"permissions"`
+	projectData struct {
+		List      []*repository `json:"list"`
+		Page      int           `json:"page"`
+		PageSize  int           `json:"pageSize"`
+		TotalPage int           `json:"totalPage"`
+		TotalRow  int           `json:"totalRow"`
+	}
+	projectRet struct {
+		Code int         `json:"code"`
+		Data projectData `json:"data"`
 	}
 
-	// gitea permissions details.
+	// coding repository resource.
+	repository struct {
+		ID            int    `json:"id"`
+		OwnerUsername string `json:"owner_user_name"`
+
+		Name     string `json:"name"`
+		FullName string `json:"display_name"`
+		//Private       bool      `json:"private"`
+		Fork          bool   `json:"forked"`
+		HTMLURL       string `json:"https_url"`
+		SSHURL        string `json:"ssh_url"`
+		CloneURL      string `json:"git_url"`
+		DefaultBranch string `json:"default_branch"`
+		CreatedAt     int64  `json:"created_at"`
+		UpdatedAt     int64  `json:"updated_at"`
+		//Permissions   perm      `json:"permissions"`
+	}
+
+	// coding permissions details.
 	perm struct {
 		Admin bool `json:"admin"`
 		Push  bool `json:"push"`
 		Pull  bool `json:"pull"`
 	}
 
-	// gitea hook resource.
+	// coding hook resource.
 	hook struct {
 		ID     int        `json:"id"`
 		Type   string     `json:"type"`
@@ -141,14 +164,14 @@ type (
 		Config hookConfig `json:"config"`
 	}
 
-	// gitea hook configuration details.
+	// coding hook configuration details.
 	hookConfig struct {
 		URL         string `json:"url"`
 		ContentType string `json:"content_type"`
 		Secret      string `json:"secret"`
 	}
 
-	// gitea status resource.
+	// coding status resource.
 	status struct {
 		CreatedAt   time.Time `json:"created_at"`
 		UpdatedAt   time.Time `json:"updated_at"`
@@ -158,7 +181,7 @@ type (
 		Context     string    `json:"context"`
 	}
 
-	// gitea status creation request.
+	// coding status creation request.
 	statusInput struct {
 		State       string `json:"state"`
 		TargetURL   string `json:"target_url"`
@@ -171,9 +194,9 @@ type (
 // native data structure conversion
 //
 
-func convertRepositoryList(src []*repository) []*scm.Repository {
+func convertRepositoryList(src *projectRet) []*scm.Repository {
 	var dst []*scm.Repository
-	for _, v := range src {
+	for _, v := range src.Data.List {
 		dst = append(dst, convertRepository(v))
 	}
 	return dst
@@ -182,21 +205,24 @@ func convertRepositoryList(src []*repository) []*scm.Repository {
 func convertRepository(src *repository) *scm.Repository {
 	return &scm.Repository{
 		ID:        strconv.Itoa(src.ID),
-		Namespace: userLogin(&src.Owner),
+		Namespace: src.OwnerUsername,
 		Name:      src.Name,
-		Perm:      convertPerm(src.Permissions),
+		Perm:      convertPerm(perm{}),
 		Branch:    src.DefaultBranch,
-		Private:   src.Private,
+		Private:   true, //默认项目私有
 		Clone:     src.CloneURL,
 		CloneSSH:  src.SSHURL,
+		Created:   time.Unix(src.CreatedAt/1000, 0),
+		Updated:   time.Unix(src.UpdatedAt/1000, 0),
 	}
 }
 
+// 默认权限
 func convertPerm(src perm) *scm.Perm {
 	return &scm.Perm{
-		Push:  src.Push,
-		Pull:  src.Pull,
-		Admin: src.Admin,
+		Push:  false,
+		Pull:  true,
+		Admin: false,
 	}
 }
 
