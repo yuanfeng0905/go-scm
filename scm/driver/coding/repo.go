@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/drone/go-scm/scm"
@@ -71,27 +72,29 @@ func (s *repositoryService) ListStatus(ctx context.Context, repo string, ref str
 }
 
 func (s *repositoryService) CreateHook(ctx context.Context, repo string, input *scm.HookInput) (*scm.Hook, *scm.Response, error) {
-	target, err := url.Parse(input.Target)
-	if err != nil {
-		return nil, nil, err
-	}
-	params := target.Query()
-	params.Set("secret", input.Secret)
-	target.RawQuery = params.Encode()
+	// target, err := url.Parse(input.Target)
+	// if err != nil {
+	// 	return nil, nil, err
+	// }
+	// params := target.Query()
+	// params.Set("secret", input.Secret)
+	// target.RawQuery = params.Encode()
 
-	path := fmt.Sprintf("api/v1/repos/%s/hooks", repo)
-	in := new(hook)
-	in.Type = "gitea"
-	in.Active = true
-	in.Config.Secret = input.Secret
-	in.Config.ContentType = "json"
-	in.Config.URL = target.String()
-	in.Events = append(
-		input.NativeEvents,
-		convertHookEvent(input.Events)...,
-	)
+	// 默认repo格式为owner/repo
+	sp := strings.Split(repo, "/")
+	inParams := url.Values{}
+	inParams.Set("hook_url", input.Target)
+	inParams.Set("token", input.Secret)
+	if input.Events.PullRequest {
+		inParams.Set("type_mr_pr", "on")
+	} else if input.Events.Push {
+		inParams.Set("type_push", "on")
+	}
+
+	path := fmt.Sprintf("api/user/%s/project/%s/git/hook?%s", sp[0], sp[1], inParams.Encode())
+
 	out := new(hook)
-	res, err := s.client.do(ctx, "POST", path, in, out)
+	res, err := s.client.do(ctx, "POST", path, nil, out)
 	return convertHook(out), res, err
 }
 
@@ -207,11 +210,12 @@ func convertRepositoryList(src *projectRet) []*scm.Repository {
 }
 
 func convertRepository(src *repository) *scm.Repository {
-	return &scm.Repository{
+	r := &scm.Repository{
 		ID:        strconv.Itoa(src.ID),
 		Namespace: src.Owner.Login,
 		Name:      src.Name,
 		Perm:      convertPerm(perm{}),
+		SCM:       "coding",
 		Branch:    src.DefaultBranch,
 		Private:   true, //默认项目私有
 		Clone:     src.CloneURL,
@@ -219,14 +223,21 @@ func convertRepository(src *repository) *scm.Repository {
 		Created:   time.Unix(src.CreatedAt/1000, 0),
 		Updated:   time.Unix(src.UpdatedAt/1000, 0),
 	}
+
+	// hook
+	// 获取项目列表时，namespace从owner_user_name取
+	if src.OwnerUsername != "" && r.Namespace == "" {
+		r.Namespace = src.OwnerUsername
+	}
+	return r
 }
 
-// 默认权限
+// 默认所有coding项目给最高权限
 func convertPerm(src perm) *scm.Perm {
 	return &scm.Perm{
-		Push:  false,
+		Push:  true,
 		Pull:  true,
-		Admin: false,
+		Admin: true,
 	}
 }
 

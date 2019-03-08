@@ -15,6 +15,7 @@ type (
 		ID        string
 		Namespace string
 		Name      string
+		SCM       string
 		Perm      *Perm
 		Branch    string
 		Private   bool
