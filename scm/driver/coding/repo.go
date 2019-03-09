@@ -215,7 +215,6 @@ func convertRepository(src *repository) *scm.Repository {
 		Namespace: src.Owner.Login,
 		Name:      src.Name,
 		Perm:      convertPerm(perm{}),
-		SCM:       "coding",
 		Branch:    src.DefaultBranch,
 		Private:   true, //默认项目私有
 		Clone:     src.CloneURL,

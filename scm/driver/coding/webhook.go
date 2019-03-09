@@ -5,11 +5,14 @@
 package coding
 
 import (
+	"crypto/hmac"
+	"crypto/sha1"
 	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/drone/go-scm/scm"
@@ -48,7 +51,7 @@ func (s *webhookService) Parse(req *http.Request, fn scm.SecretFunc) (scm.Webhoo
 		return nil, err
 	}
 
-	// get the gitea signature key to verify the payload
+	// get the coding signature key to verify the payload
 	// signature. If no key is provided, no validation
 	// is performed.
 	key, err := fn(hook)
@@ -58,8 +61,12 @@ func (s *webhookService) Parse(req *http.Request, fn scm.SecretFunc) (scm.Webhoo
 		return hook, nil
 	}
 
-	secret := req.FormValue("secret")
-	if secret != key {
+	// 获取coding签名头
+	h := hmac.New(sha1.New, []byte(key))
+	h.Write(data)
+	signature := fmt.Sprintf("%x", h.Sum(nil))
+	secret := strings.TrimPrefix(req.Header.Get("X-Coding-Signature"), "sha1=")
+	if secret != signature {
 		return hook, scm.ErrSignatureInvalid
 	}
 
